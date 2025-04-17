@@ -7,30 +7,23 @@
  */
 template <size_t PageSize>
 bool BitmapPage<PageSize>::AllocatePage(uint32_t &page_offset) {
-    if (next_free_page_>=GetMaxSupportedSize()){
-        return false;
+    uint32_t count=0;
+    while(!IsPageFree(next_free_page_)){
+        count++;
+        next_free_page_++;
+        next_free_page_%=GetMaxSupportedSize();
+        if (count>GetMaxSupportedSize()){
+            return false;
+        }
     }
+
+    page_allocated_++;
     page_offset=next_free_page_;
     uint32_t byte_index=page_offset / 8;
     uint8_t bit_index=page_offset % 8;
-    page_allocated_++;
     bytes[byte_index]|=(1<<bit_index);
-    uint32_t count=0;
+    return true;
 
-    if (page_allocated_ == GetMaxSupportedSize()) {
-        next_free_page_ = GetMaxSupportedSize();
-        return true;
-    }
-
-    do{
-        count++;
-        next_free_page_+=1;
-        next_free_page_%=GetMaxSupportedSize();
-        if (IsPageFree(next_free_page_)){
-            return true;
-        }
-    }while(count!=GetMaxSupportedSize()+3);
-    return false;
 }
 
 /**
