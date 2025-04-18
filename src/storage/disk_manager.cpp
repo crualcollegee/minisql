@@ -133,7 +133,7 @@ page_id_t DiskManager::MapPageId(page_id_t logical_page_id) {
     if (logical_page_id >= MAX_VALID_PAGE_ID){
         throw std::exception();
     }
-    return ( logical_page_id / BITMAP_SIZE ) * (1 + BITMAP_SIZE) + 1;
+    return ( logical_page_id / BITMAP_SIZE ) + logical_page_id + 2;
 }
 
 int DiskManager::GetFileSize(const std::string &file_name) {
