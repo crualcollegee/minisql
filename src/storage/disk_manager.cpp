@@ -59,8 +59,7 @@ void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
  */
 page_id_t DiskManager::AllocatePage() {
     DiskFileMetaPage* meta_page = reinterpret_cast<DiskFileMetaPage*>(meta_data_);
-    LOG(INFO) << "Meta page: halo " << meta_page->num_allocated_pages_ << " " << meta_page->num_extents_;
-    if (meta_page->GetAllocatedPages()>=MAX_VALID_PAGE_ID && meta_page->num_extents_ >= (PAGE_SIZE - 8) / 4){
+    if (meta_page->GetAllocatedPages()>=MAX_VALID_PAGE_ID){
         return INVALID_PAGE_ID;
     }
     uint32_t locate_Bitmap;
@@ -72,9 +71,10 @@ page_id_t DiskManager::AllocatePage() {
             BitmapPage<PAGE_SIZE>* Bitpage=reinterpret_cast<BitmapPage<PAGE_SIZE>*>(page_data);
             uint32_t page_offset;
             if (!(Bitpage->AllocatePage(page_offset))){
-                return INVALID_PAGE_ID;
+                throw std::exception();
             }
             WritePhysicalPage(locate_physics,page_data);
+            delete[] page_data;
             page_id_t page_s = locate_physics * BITMAP_SIZE + page_offset;
             meta_page->num_allocated_pages_++;
             meta_page->extent_used_page_[locate_Bitmap]++;
@@ -90,25 +90,54 @@ page_id_t DiskManager::AllocatePage() {
     return (meta_page->num_extents_-1)*BITMAP_SIZE;
 }
 
-/**
- * TODO: Student Implement
+/*
  */
 void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
-  ASSERT(false, "Not implemented yet.");
+    DiskFileMetaPage *meta_page = reinterpret_cast<DiskFileMetaPage *>(meta_data_);
+    if (logical_page_id >= MAX_VALID_PAGE_ID){
+        throw std::exception();
+    }
+    int locate_physics =( logical_page_id / BITMAP_SIZE ) * (1 + BITMAP_SIZE) + 1;
+    // 将逻辑地址转化为物理地址非常的关键
+    uint32_t page_offset = logical_page_id % BITMAP_SIZE;
+    char* page_data = new char[sizeof(BitmapPage<PAGE_SIZE>)];
+    ReadPhysicalPage(locate_physics,page_data);
+    BitmapPage<PAGE_SIZE>* Bitpage=reinterpret_cast<BitmapPage<PAGE_SIZE>*>(page_data);
+    if (!Bitpage->DeAllocatePage(page_offset)){
+        throw std::exception();
+    }
+    WritePhysicalPage(locate_physics,page_data);
+    delete[] page_data;
+    meta_page->num_allocated_pages_--;
+    uint32_t locate_Bitmap;
+    locate_Bitmap = locate_physics / BITMAP_SIZE;
+    meta_page->extent_used_page_[locate_Bitmap]--;
 }
 
-/**
- * TODO: Student Implement
+/*
  */
 bool DiskManager::IsPageFree(page_id_t logical_page_id) {
-  return false;
+    DiskFileMetaPage *meta_page = reinterpret_cast<DiskFileMetaPage *>(meta_data_);
+    if (logical_page_id >= MAX_VALID_PAGE_ID){
+        throw std::exception();
+    }
+    int locate_physics =( logical_page_id / BITMAP_SIZE ) * (1 + BITMAP_SIZE) + 1;
+    uint32_t page_offset = logical_page_id % BITMAP_SIZE;
+    char* page_data = new char[sizeof(BitmapPage<PAGE_SIZE>)];
+    ReadPhysicalPage(locate_physics,page_data);
+    BitmapPage<PAGE_SIZE>* Bitpage=reinterpret_cast<BitmapPage<PAGE_SIZE>*>(page_data);
+    delete[] page_data;
+    return Bitpage->IsPageFree(page_offset);
 }
 
-/**
- * TODO: Student Implement
+/*
  */
 page_id_t DiskManager::MapPageId(page_id_t logical_page_id) {
-  return 0;
+    DiskFileMetaPage *meta_page = reinterpret_cast<DiskFileMetaPage *>(meta_data_);
+    if (logical_page_id >= MAX_VALID_PAGE_ID){
+        throw std::exception();
+    }
+    return ( logical_page_id / BITMAP_SIZE ) * (1 + BITMAP_SIZE) + 1;
 }
 
 int DiskManager::GetFileSize(const std::string &file_name) {
