@@ -22,10 +22,49 @@ BufferPoolManager::~BufferPoolManager() {
   delete replacer_;
 }
 
-/**
- * TODO: Student Implement
- */
+
 Page *BufferPoolManager::FetchPage(page_id_t page_id) {
+    if (page_id >= MAX_VALID_PAGE_ID){
+        return nullptr;
+    }
+    if (page_table_.find(page_id) != page_table_.end()){
+        frame_id_t new_frame = page_table_[page_id];
+        pages_[new_frame].pin_count_++;
+        replacer_->Pin(new_frame);
+        return &(pages_[new_frame]);
+    }
+    if (!free_list_.empty()){
+        frame_id_t new_frame = free_list_.front();
+        free_list_.pop_front();
+        disk_manager_->ReadPage(page_id,pages_[new_frame].GetData());
+        pages_[new_frame].pin_count_ = 1;
+        pages_[new_frame].page_id_ = page_id;
+        auto it = page_table_.find(page_id);
+        // 下面这一段删除已有page table映射
+        if (it != page_table_.end()) {
+            page_table_.erase(it);
+        }
+        else{
+            throw std::exception();
+        }
+        // 添加新映射
+        auto result = page_table_.insert({page_id,new_frame});
+        return &(pages_[page_id]);
+    }
+    else{
+        frame_id_t new_frame;
+        replacer_->Victim(&new_frame);
+        if (pages_[new_frame].IsDirty()){
+            disk_manager_->WritePage(pages_[new_frame].GetPageId(),pages_[new_frame].GetData());
+            pages_[new_frame].is_dirty_=false;
+        }
+        disk_manager_->ReadPage(page_id,pages_[new_frame].GetData());
+        pages_[new_frame].pin_count_ = 1;
+        pages_[new_frame].page_id_ = page_id;
+        page_table_[page_id] = new_frame;
+        return &(pages_[page_id]);
+    }
+
   // 1.     Search the page table for the requested page (P).
   // 1.1    If P exists, pin it and return it immediately.
   // 1.2    If P does not exist, find a replacement page (R) from either the free list or the replacer.
