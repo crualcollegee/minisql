@@ -48,11 +48,46 @@ void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
 }
 
 /**
- * TODO: Student Implement
+ *
+    tips:
+     1. 检查超界问题
+     2. 检查每个extend
+     3. 根据物理地址将一个bitmap读入内存
+     4. 分配页
+     5. 写回硬盘
+     6. 没有空间的话新建extent
  */
 page_id_t DiskManager::AllocatePage() {
-  ASSERT(false, "Not implemented yet.");
-  return INVALID_PAGE_ID;
+    DiskFileMetaPage* meta_page = reinterpret_cast<DiskFileMetaPage*>(meta_data_);
+    LOG(INFO) << "Meta page: halo " << meta_page->num_allocated_pages_ << " " << meta_page->num_extents_;
+    if (meta_page->GetAllocatedPages()>=MAX_VALID_PAGE_ID && meta_page->num_extents_ >= (PAGE_SIZE - 8) / 4){
+        return INVALID_PAGE_ID;
+    }
+    uint32_t locate_Bitmap;
+    for (locate_Bitmap=0;locate_Bitmap<meta_page->GetExtentNums();locate_Bitmap++){
+        if (meta_page->GetExtentUsedPage(locate_Bitmap)<BITMAP_SIZE ){
+            int locate_physics = 1 + (1 + BITMAP_SIZE) * locate_Bitmap;
+            char* page_data = new char[sizeof(BitmapPage<PAGE_SIZE>)];
+            ReadPhysicalPage(locate_physics,page_data);
+            BitmapPage<PAGE_SIZE>* Bitpage=reinterpret_cast<BitmapPage<PAGE_SIZE>*>(page_data);
+            uint32_t page_offset;
+            if (!(Bitpage->AllocatePage(page_offset))){
+                return INVALID_PAGE_ID;
+            }
+            WritePhysicalPage(locate_physics,page_data);
+            page_id_t page_s = locate_physics * BITMAP_SIZE + page_offset;
+            meta_page->num_allocated_pages_++;
+            meta_page->extent_used_page_[locate_Bitmap]++;
+            return page_s;
+        }
+    }
+    BitmapPage<PAGE_SIZE> New_bitmap;
+    int new_page_location = 1 + (1 + BITMAP_SIZE) * meta_page->num_extents_;
+    WritePhysicalPage(new_page_location,reinterpret_cast<char*>(&New_bitmap));
+    meta_page->num_allocated_pages_++;
+    meta_page->extent_used_page_[meta_page->num_extents_] = 1;
+    meta_page->num_extents_++;
+    return (meta_page->num_extents_-1)*BITMAP_SIZE;
 }
 
 /**
