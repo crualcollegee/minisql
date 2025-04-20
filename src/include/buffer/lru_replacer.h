@@ -36,6 +36,9 @@ class LRUReplacer : public Replacer {
   size_t Size() override;
 
 private:
+    size_t lru_size;
+    list<frame_id_t> lru_queue;
+    unordered_set<frame_id_t> lru_set;
   // add your own private member variables here
 };
 

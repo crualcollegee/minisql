@@ -4,30 +4,39 @@ LRUReplacer::LRUReplacer(size_t num_pages){}
 
 LRUReplacer::~LRUReplacer() = default;
 
-/**
- * TODO: Student Implement
- */
+
 bool LRUReplacer::Victim(frame_id_t *frame_id) {
-  return false;
+    if (lru_queue.empty()){
+        return false;
+    }
+    *frame_id = lru_queue.back();
+    lru_queue.pop_back();
+    lru_set.erase(*frame_id);
+    lru_size--;
+    return true;
 }
 
-/**
- * TODO: Student Implement
- */
+
 void LRUReplacer::Pin(frame_id_t frame_id) {
-
+    if (lru_set.find(frame_id)==lru_set.end()){
+        return;
+    }
+    lru_size--;
+    lru_queue.remove(frame_id);
+    lru_set.erase(frame_id);
 }
 
-/**
- * TODO: Student Implement
- */
+
 void LRUReplacer::Unpin(frame_id_t frame_id) {
-
+    if (lru_set.find(frame_id)!=lru_set.end()){
+        return;
+    }
+    lru_size++;
+    lru_set.insert(frame_id);
+    lru_queue.push_front(frame_id);
 }
 
-/**
- * TODO: Student Implement
- */
+
 size_t LRUReplacer::Size() {
-  return 0;
+  return lru_size;
 }
