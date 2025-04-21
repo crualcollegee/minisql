@@ -100,6 +100,7 @@ class TablePage : public Page {
   static uint32_t UnsetDeletedFlag(uint32_t tuple_size) { return static_cast<uint32_t>(tuple_size & (~DELETE_MASK)); }
 
  private:
+  friend class TableHeap;
   static_assert(sizeof(page_id_t) == 4);
   static constexpr uint64_t DELETE_MASK = (1U << (8 * sizeof(uint32_t) - 1));
   static constexpr size_t SIZE_TABLE_PAGE_HEADER = 24;

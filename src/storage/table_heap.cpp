@@ -6,57 +6,73 @@
 bool TableHeap::InsertTuple(Row &row, Txn *txn) {
   // 获取行的序列化大小
   uint32_t row_size = row.GetSerializedSize(schema_);
-  // 如果行的大小超过页面大小，则无法插入
   if (row_size >= PAGE_SIZE) {
+    // 行太大，直接拒绝
     return false;
   }
 
-  // 从第一个页面开始尝试插入
-  page_id_t current_page_id = first_page_id_;
-  while (current_page_id != INVALID_PAGE_ID) {
-    auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(current_page_id));
-    if (page == nullptr) {
-      //printf("Error: Unable to fetch page %d\n", current_page_id);
-      return false; // 无法获取页面
+  // 在现有 page_free_space_ 中查找可容纳行的页面
+  auto page_iter = std::find_if(
+      page_free_space_.begin(), page_free_space_.end(),
+      [row_size](const auto &pair) {
+        return pair.second >= row_size + TablePage::SIZE_TUPLE;
+      });
+
+  TablePage *target_page = nullptr;
+
+  if (page_iter == page_free_space_.end()) {
+    // 没找到 → 创建新页
+    page_id_t new_page_id;
+    auto new_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(new_page_id));
+    if (new_page == nullptr) {
+      return false; // 创建失败
     }
 
-    page->WLatch(); // 加写锁
-    RowId rid;
-    if (page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_)) {
-      // 插入成功，设置行的 RowId 并释放页面
-      row.SetRowId(rid);
-      page->WUnlatch();
-      buffer_pool_manager_->UnpinPage(current_page_id, true);
-      return true;
+    // 链接新页到链表尾
+    page_id_t prev_page_id = INVALID_PAGE_ID;
+    if (!page_free_space_.empty()) {
+      prev_page_id = page_free_space_.rbegin()->first;
     }
-    page->WUnlatch();
-    buffer_pool_manager_->UnpinPage(current_page_id, false);
 
-    // 尝试下一个页面
-    current_page_id = page->GetNextPageId();
+    new_page->Init(new_page_id, prev_page_id, log_manager_, txn);
+
+    // 如果存在前页，设置其 next_page_id
+    if (prev_page_id != INVALID_PAGE_ID) {
+      auto prev_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(prev_page_id));
+      prev_page->WLatch();
+      prev_page->SetNextPageId(new_page_id);
+      prev_page->WUnlatch();
+      buffer_pool_manager_->UnpinPage(prev_page_id, true);
+    }
+
+    // 更新 target_page 指针
+    target_page = new_page;
+  } else {
+    // 找到已有 page，直接取出来
+    target_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(page_iter->first));
   }
 
-  // 如果所有页面都无法插入，则创建新页面
-  auto new_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(current_page_id));
-  if (new_page == nullptr) {
-    printf("Error: Unable to create new page\n");
-    return false; // 无法创建新页面
+  // 插入行
+  target_page->WLatch();
+  bool insert_success = target_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
+  target_page->WUnlatch();
+
+  if (!insert_success) {
+    // 插入失败，释放页面
+    buffer_pool_manager_->UnpinPage(target_page->GetPageId(), false);
+    return false;
   }
 
-  new_page->Init(current_page_id, first_page_id_, log_manager_, txn); // 初始化新页面
-  RowId rid;
-  new_page->WLatch();
-  bool success = new_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
-  new_page->WUnlatch();
-  buffer_pool_manager_->UnpinPage(current_page_id, true);
+  // 更新该页面的剩余空间记录
+  page_free_space_[target_page->GetTablePageId()] = target_page->GetFreeSpaceRemaining();
 
-  if (success) {
-    row.SetRowId(rid);
-    first_page_id_ = current_page_id; // 更新表的第一个页面 ID
-  }
+  // 释放页面
+  buffer_pool_manager_->UnpinPage(target_page->GetPageId(), true);
 
-  return success;
+  return true;
 }
+
+
 
 bool TableHeap::MarkDelete(const RowId &rid, Txn *txn) {
   // Find the page which contains the tuple.

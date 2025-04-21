@@ -33,6 +33,7 @@ uint32_t Schema::DeserializeFrom(char *buf, Schema *&schema) {
   // 读取魔数并校验
   uint32_t magic_num = 0;
   memcpy(&magic_num, buf + offset, sizeof(SCHEMA_MAGIC_NUM));
+  printf("magic_num: %u\n", magic_num);
   offset += sizeof(SCHEMA_MAGIC_NUM);
   if (magic_num != SCHEMA_MAGIC_NUM) {
     LOG(ERROR) << "Schema magic number mismatch!";
