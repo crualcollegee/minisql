@@ -8,7 +8,7 @@
 
 class GenericKey {
   friend class KeyManager;
-  char data[0];
+  char data[0];  //generickey中的data已经是序列化之后的char* 了 
 };
 
 class KeyManager {

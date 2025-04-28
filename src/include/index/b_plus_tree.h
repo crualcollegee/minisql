@@ -101,7 +101,7 @@ class BPlusTree {
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
   // member variable
-  index_id_t index_id_;
+  index_id_t index_id_;         //整棵树的索引
   page_id_t root_page_id_{INVALID_PAGE_ID};
   BufferPoolManager *buffer_pool_manager_;
   KeyManager processor_;
