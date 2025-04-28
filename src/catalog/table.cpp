@@ -6,6 +6,7 @@ uint32_t TableMetadata::SerializeTo(char *buf) const {
   ASSERT(ofs <= PAGE_SIZE, "Failed to serialize table info.");
   // magic num
   MACH_WRITE_UINT32(buf, TABLE_METADATA_MAGIC_NUM);
+  //printf("magic_num: %u\n", TABLE_METADATA_MAGIC_NUM);
   buf += 4;
   // table id
   MACH_WRITE_TO(table_id_t, buf, table_id_);
@@ -19,7 +20,11 @@ uint32_t TableMetadata::SerializeTo(char *buf) const {
   MACH_WRITE_TO(page_id_t, buf, root_page_id_);
   buf += 4;
   // table schema
-  buf += schema_->SerializeTo(buf);
+  int tmp = schema_->SerializeTo(buf);
+  //printf("tmp: %d,schema_->GetSerializedSize(): %d\n", tmp, schema_->GetSerializedSize());
+  ASSERT(tmp == schema_->GetSerializedSize(), "Unexpected serialize size.");
+  buf += tmp;
+  //printf("tmp: %d\n", tmp);
   ASSERT(buf - p == ofs, "Unexpected serialize size.");
   return ofs;
 }
@@ -28,7 +33,8 @@ uint32_t TableMetadata::SerializeTo(char *buf) const {
  * TODO: Student Implement
  */
 uint32_t TableMetadata::GetSerializedSize() const {
-  return 4 + 4 + MACH_STR_SERIALIZED_SIZE(table_name_) + 4 + schema_->GetSerializedSize();
+  return sizeof(TABLE_METADATA_MAGIC_NUM) + sizeof(table_id_t) + 4
+  + table_name_.length() + sizeof(page_id_t) + schema_->GetSerializedSize();
 }
 
 /**

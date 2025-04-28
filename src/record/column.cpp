@@ -82,7 +82,7 @@ uint32_t Column::GetSerializedSize() const {
   size += name_.size();
 
   // Type
-  size += Type::GetTypeSize(type_);
+  size += sizeof(TypeId);
 
   // Length
   size += sizeof(uint32_t);

@@ -200,7 +200,6 @@ TableIterator TableHeap::Begin(Txn *txn) {
   if (page == nullptr) {
     return End(); // 如果无法获取页面，返回结束迭代器
   }
-
   page->RLatch(); // 加读锁
   bool has_tuple = page->GetFirstTupleRid(&first_rid); // 获取第一个有效记录的 RowId
   page->RUnlatch(); // 释放读锁

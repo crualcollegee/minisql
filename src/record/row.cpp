@@ -8,8 +8,6 @@ uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
 
   // 写入字段数量
   uint32_t field_count = fields_.size();
- // printf("field_count: %d\n", sizeof(field_count));
-  //printf("buf: %p ,field_count: %p\n", buf, &field_count);
   memcpy(buf + offset, &field_count, sizeof(field_count));
 
   offset += sizeof(field_count);
