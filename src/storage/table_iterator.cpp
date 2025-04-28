@@ -67,28 +67,49 @@ TableIterator &TableIterator::operator=(const TableIterator &itr) noexcept {
 
 // ++iter
 TableIterator &TableIterator::operator++() {
-  ASSERT(current_row_ != nullptr, "Incrementing an invalid iterator.");
-
-  RowId next_rid;
-  // Attempt to move to the next tuple by incrementing the RowId directly.
-  current_rid_ = RowId(current_rid_.Get() + 1);
-
-  // Check if the new RowId is valid and fetch the corresponding tuple.
-  if (!table_heap_->GetTuple(current_row_, txn_)) {
-    // If the tuple is invalid, set the iterator to the end.
-    current_rid_ = RowId(INVALID_ROWID);
-    delete current_row_;
-    current_row_ = nullptr;
-  } else {
-    // Update the current_row_ with the new RowId.
-    current_row_->SetRowId(current_rid_);
+  // 获取当前页
+  auto page = reinterpret_cast<TablePage *>(table_heap_->buffer_pool_manager_->FetchPage(current_rid_.GetPageId()));
+  if (page == nullptr) {
+    current_rid_ = RowId{-1};
+    return *this;
   }
+
+  // 尝试获取下一条 tuple 的 rid
+  if (page->GetNextTupleRid(current_rid_, &current_rid_)) {
+    table_heap_->buffer_pool_manager_->UnpinPage(page->GetTablePageId(), false);
+    return *this;
+  }
+
+  // 获取下一页 id
+  auto next_page_id = page->GetNextPageId();
+  table_heap_->buffer_pool_manager_->UnpinPage(page->GetTablePageId(), false);
+
+  // 如果没有下一页，迭代器结束
+  if (next_page_id == INVALID_PAGE_ID) {
+    current_rid_ = RowId{-1};
+    return *this;
+  }
+
+  // 取下一页
+  page = reinterpret_cast<TablePage *>(table_heap_->buffer_pool_manager_->FetchPage(next_page_id));
+  if (page == nullptr) {
+    current_rid_ = RowId{-1};
+    return *this;
+  }
+
+  // 获取下一页的第一条 tuple
+  if (!page->GetFirstTupleRid(&current_rid_)) {
+    current_rid_ = RowId{-1};
+  }
+
+  table_heap_->buffer_pool_manager_->UnpinPage(page->GetTablePageId(), false);
   return *this;
 }
 
+
 // iter++
 TableIterator TableIterator::operator++(int) {
-  TableIterator temp(*this); // Use the copy constructor to create a temporary iterator
-  ++(*this); // Increment the current iterator
-  return temp; // Return the temporary iterator
+  TableIterator temp(*this); 
+  ++(*this); 
+  return temp; 
 }

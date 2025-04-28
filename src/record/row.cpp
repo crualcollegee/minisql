@@ -7,11 +7,9 @@ uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
   uint32_t offset = 0;
 
   // 写入字段数量
-  uint32_t field_count = fields_.size();                    // 查询一个row中包含的 元素 个数
- // printf("field_count: %d\n", sizeof(field_count));
-  //printf("buf: %p ,field_count: %p\n", buf, &field_count);
-  memcpy(buf + offset, &field_count, sizeof(field_count));   // 前两个参数传入引用，所以field_count 要加&
-                                                             // memcpy 是拷贝 而不是清空
+  uint32_t field_count = fields_.size();
+  memcpy(buf + offset, &field_count, sizeof(field_count));
+
   offset += sizeof(field_count);
   // 写入空值位图
   uint32_t null_bitmap_size = (field_count + 7) / 8; // 每8个字段占1字节

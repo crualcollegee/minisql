@@ -10,10 +10,10 @@ uint32_t Schema::SerializeTo(char *buf) const {
   uint32_t column_count = GetColumnCount();
   memcpy(buf + offset, &column_count, sizeof(column_count));
   offset += sizeof(column_count);
-
   // 写入每个列的序列化数据
   for (const auto &column : columns_) {
     offset += column->SerializeTo(buf + offset);
+    //printf("offset: %d\n", offset);
   }
 
   return offset;
@@ -23,6 +23,7 @@ uint32_t Schema::GetSerializedSize() const {
   uint32_t size = sizeof(SCHEMA_MAGIC_NUM) + sizeof(uint32_t); // 魔数 + 列数量
   for (const auto &column : columns_) {
     size += column->GetSerializedSize(); // 每列的序列化大小
+    //printf("size: %d\n", size);
   }
   return size;
 }
@@ -33,7 +34,6 @@ uint32_t Schema::DeserializeFrom(char *buf, Schema *&schema) {
   // 读取魔数并校验
   uint32_t magic_num = 0;
   memcpy(&magic_num, buf + offset, sizeof(SCHEMA_MAGIC_NUM));
-  printf("magic_num: %u\n", magic_num);
   offset += sizeof(SCHEMA_MAGIC_NUM);
   if (magic_num != SCHEMA_MAGIC_NUM) {
     LOG(ERROR) << "Schema magic number mismatch!";
