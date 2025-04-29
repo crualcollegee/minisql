@@ -44,7 +44,7 @@ Page *BufferPoolManager::FetchPage(page_id_t page_id) {
         page_table_.erase(pages_[new_frame].page_id_);
         // 添加新映射
         page_table_.insert({page_id,new_frame});
-        return &(pages_[page_id]);
+        return &(pages_[new_frame]);
     }
     else{
         frame_id_t new_frame;
@@ -63,7 +63,7 @@ Page *BufferPoolManager::FetchPage(page_id_t page_id) {
         pages_[new_frame].page_id_ = page_id;
         page_table_.erase(pages_[new_frame].page_id_);
         page_table_.insert({page_id,new_frame});
-        return &(pages_[page_id]);
+        return &(pages_[new_frame]);
     }
 
   return nullptr;
@@ -148,15 +148,10 @@ bool BufferPoolManager::FlushPage(page_id_t page_id) {
     }
     else{
         frame_id_t flush_frame = page_table_[page_id];
-        if (pages_[flush_frame].pin_count_!=0){
-            return false;
-        }
-        else{
-            latch_.lock();
-            disk_manager_->WritePage(pages_[flush_frame].GetPageId(),pages_[flush_frame].GetData());
-            latch_.unlock();
-            return true;
-        }
+        latch_.lock();
+        disk_manager_->WritePage(pages_[flush_frame].GetPageId(),pages_[flush_frame].GetData());
+        latch_.unlock();
+        return true;
     }
   return false;
 }

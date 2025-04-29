@@ -5,7 +5,7 @@
   title: "数据库系统 实验",
   course: "数据库系统",
   name: "MiniSQL",
-  author: "陈皓天 张远帆",
+  author: "陈皓天",
 
   place: "西教 506",
   teacher: "苗晓烨",
@@ -82,4 +82,78 @@
     grid(columns: 39em, inset: 0.1em,fill: luma(230),align(right)[
       
   #image("images/4.png")
+]))
+
+=  第二章 #h(0.4em) 模块 #h(0.2em)3
+#h(2em)IndexManagement 模块的代码量较大，我花费了大约一周时间完成了这个代码，并且通过了测试；模块2是交给我的队友完成的，模块2与模块3的交集大概就是在 ```c row.cpp 和 generickey``` 上了；我首先读懂了这两个模块的代码，然后从底层代码开始看起。
+
+*1. 基本page类*
+
+#h(2em)首先是完成了 ```c b_plus_tree_page.cpp ```代码，这个模块较为简单，是叶子节点和内部节点的父类，就是完成了一些两者共有的方法，比较简单，不加以赘述.
+
+#h(2em)接着我完成了```c b_plus_tree_internal_page.cpp```代码；首先要明确的是，一个internal类在一般情况下分为多个genericKey类和page_id_t 类，这两个类合在一起为一个pair；但其中的地一个pair一般只包含page_id_t 类，这是b+树特有的性质。
+
+#h(2em)这个模块给我带来印象最深的就是多个 internalpage 类的交互，通过外界参数recipient的传入，我们可以将this的部分pair通过类的public接口转移到recipient去，实现了传递。
+
+#figure(
+    grid(columns: 39em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/5.png")
+]))
+
+#h(2em)但做到这里为止，我发现internalpage类有些接口没有被自己使用到，而且接口繁多，我猜测是有其他类将来会引用这些接口
+
+\
+
+#h(2em)然后便是leafpage类的完成，这个类和internalpage类就较为重合了，我较为轻松的完成了；我特别注意到了删除某个pair这个方法的时候，我没有使用PairCopy进行批量“位移”，因为担心内存重叠的危险，我按照类似冒泡排序中的逐个位移的方法，一次只PairCopy 1个pair.
+
+#figure(
+    grid(columns: 39em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/6.png")
+]))
+#h(2em)特别需要注意的是，这个pair包含的是一个```c generickey ```和 ```c rowID```的指针，也就是说包含类一个指向实际数据（rowID）的指针。而刚刚的 internalpage 的pair的第二个元素就是 一个pageID（不是指针）,可以调用```c FetchPage() ```来获取相应```c pageID```的page.
+
+#h(2em)（在以前```（ADS课程）```的实现中内部节点往往是通过指针指向子节点的，而这里有```c buffer_pool_manager.cpp```充当了管理页面的作用）
+
+\
+
+*2. b_plus_tree树类*
+
+#h(2em)然后就是工程量最大的```c b_plus_tree.cpp```的编写，也就是这个地方才会和```c buffer_pool_manager.cpp```打交道，尤其是其```c UnpinPage()``` 函数，要被经常调用；一开始我写的时候经常忘了这茬,但后来对读取页面和保存页面的操作熟悉之后就得心应手了。
+
+#h(2em)这个类其实就是一棵树，但类不包含树的所有信息，而是在需要的时候从内存池中fetch下来。其实我*有个疑惑*，就是这个类对
+```c buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)) ```这个记录 ```c 树的index和root_page_id``` 的页面经常调用和修改，但从来没看见被使用过。我只能合理猜测在后面的模块中会被用到吧。（树的index在这个模块里也没被使用过）
+
+#h(2em)其他的模块对我印象较深的就是删除的向上递归过程，以及```c CoalesceOrRedistribute()```、```c Coalesce()``` 和 ```c Redistribute()```的相互调用，显得比较有逻辑感。这几个函数也调用了``` c (internal/leaf) page```类大量的 ```c movehalfto()```、```c moveallto()```等之前看起来比较奇怪的函数。
+
+#figure(
+    grid(columns: 39em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/7.png")
+]))
+
+*3. index_iterator类*
+
+#h(2em)这个类比较简单，实现了一个简单的迭代器iterator,具体到某一页的某一个pair.另外，这个iterator也在```c b_plus_tree``` 中被使用到了,在此不加以赘述
+
+#figure(
+    grid(columns: 28em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/8.png")
+]))
+
+*4. 正确性测试*
+#figure(
+    grid(columns: 26em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/9.png")
+]))
+
+*5. git推送记录*
+
+#figure(
+    grid(columns: 33em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/10.png")
 ]))
