@@ -43,7 +43,7 @@ void DiskManager::ReadPage(page_id_t logical_page_id, char *page_data) {
 }
 
 void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
-  ASSERT(logical_page_id >= 0, "Invalid page id.");
+
   WritePhysicalPage(MapPageId(logical_page_id), page_data);
 }
 
