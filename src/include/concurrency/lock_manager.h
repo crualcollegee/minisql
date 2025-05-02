@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
+#include <map>
 #include "common/config.h"
 #include "common/rowid.h"
 
@@ -165,7 +165,8 @@ public:
     }
 
     inline void DisableCycleDetection() { enable_cycle_detection_ = false; }
-
+    bool DFS(txn_id_t current, std::unordered_set<txn_id_t> &visited,
+        std::unordered_set<txn_id_t> &rec_stack, txn_id_t &txn_id);
 private:
     void LockPrepare(Txn *txn, const RowId &rid);
 
@@ -177,7 +178,7 @@ private:
     std::mutex latch_{};
 
     /** Waits-for graph representation. */
-    std::unordered_map<txn_id_t, std::set<txn_id_t>> waits_for_{};
+    std::map<txn_id_t, std::set<txn_id_t>> waits_for_{};
     std::unordered_set<txn_id_t> visited_set_{};
     std::stack<txn_id_t> visited_path_{};
     txn_id_t revisited_node_{INVALID_TXN_ID};
