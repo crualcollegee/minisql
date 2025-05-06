@@ -14,7 +14,7 @@
 #include "concurrency/txn.h"
 #include "recovery/log_manager.h"
 
-class CatalogMeta {
+class CatalogMeta {//记录和管理这些表和索引的元信息被存储在哪个数据页中
   friend class CatalogManager;
 
  public:
@@ -118,6 +118,7 @@ class CatalogManager {
   // map for indexes: table_name->index_name->indexes
   std::unordered_map<std::string, std::unordered_map<std::string, index_id_t>> index_names_;
   std::unordered_map<index_id_t, IndexInfo *> indexes_;
+  friend class ExecuteEngine;
 };
 
 #endif  // MINISQL_CATALOG_H

@@ -194,25 +194,10 @@ void TableHeap::DeleteTable(page_id_t page_id) {
 }
 
 TableIterator TableHeap::Begin(Txn *txn) {
-  // 获取第一个有效的记录的 RowId
-  RowId first_rid;
-  auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(first_page_id_));
-  if (page == nullptr) {
-    return End(); // 如果无法获取页面，返回结束迭代器
-  }
-  page->RLatch(); // 加读锁
-  bool has_tuple = page->GetFirstTupleRid(&first_rid); // 获取第一个有效记录的 RowId
-  page->RUnlatch(); // 释放读锁
-  buffer_pool_manager_->UnpinPage(first_page_id_, false);
-
-  if (!has_tuple) {
-    return End(); // 如果没有有效记录，返回结束迭代器
-  }
-
-  return TableIterator(this, first_rid, txn);
+  return TableIterator(this, RowId{0}, txn);
 }
 
 TableIterator TableHeap::End() {
   // 返回一个无效的迭代器
-  return TableIterator(this, RowId(INVALID_ROWID), nullptr);
+  return TableIterator(this, RowId(-1), nullptr);
 }
