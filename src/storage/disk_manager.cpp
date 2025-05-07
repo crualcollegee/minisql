@@ -123,8 +123,10 @@ bool DiskManager::IsPageFree(page_id_t logical_page_id) {
     char* page_data = new char[sizeof(BitmapPage<PAGE_SIZE>)];
     ReadPhysicalPage(locate_physics,page_data);
     BitmapPage<PAGE_SIZE>* Bitpage=reinterpret_cast<BitmapPage<PAGE_SIZE>*>(page_data);
+    
+    bool is_free =  Bitpage->IsPageFree(page_offset);
     delete[] page_data;
-    return Bitpage->IsPageFree(page_offset);
+    return is_free;
 }
 
 /*
