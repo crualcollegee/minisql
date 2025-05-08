@@ -17,6 +17,16 @@
 #include "planner/planner.h"
 #include "utils/utils.h"
 
+#include <fstream>
+#include "parser/parser.h"
+
+extern "C" {
+  typedef struct yy_buffer_state* YY_BUFFER_STATE;
+  YY_BUFFER_STATE yy_scan_string(const char *); 
+  void yy_delete_buffer(YY_BUFFER_STATE);
+  int yyparse();
+}
+
 ExecuteEngine::ExecuteEngine() {
   char path[] = "./databases";
   DIR *dir;
@@ -339,12 +349,105 @@ dberr_t ExecuteEngine::ExecuteShowTables(pSyntaxNode ast, ExecuteContext *contex
 
 /**
  * TODO: Student Implement
+ * 先找到ast的最后，将uniquekey记录下来
+ * 然后读取每一个column,组成columns构建schema
+ * 根据 uniquekey和primarykey 分别构建索引树
  */
 dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *context) {
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteCreateTable" << std::endl;
 #endif
-  return DB_FAILED;
+  if (current_db_.empty()){
+    return DB_FAILED;
+  }
+  auto ast_1 = ast->child_; 
+  string tableName;
+  if (ast_1 == nullptr||ast_1->type_!=kNodeIdentifier){
+    return DB_FAILED;
+  }
+  else{
+    tableName = string(ast_1->val_);
+  }
+  auto ast_2 = ast_1->next_;
+  if (ast_2 == nullptr||ast_2->type_!=kNodeColumnDefinitionList){
+    return DB_FAILED;
+  }
+  
+  auto iter_ast = ast_2->child_;
+  while (iter_ast!=nullptr && iter_ast->type_!=kNodeColumnList){
+    iter_ast = iter_ast->next_;
+  }
+  vector<string> primaryList;
+  vector<string> uniqueList;
+  vector<Column*> ColumnList;
+  if (iter_ast == nullptr || iter_ast->type_!=kNodeColumnList || 
+    iter_ast->child_==nullptr || iter_ast->child_->type_!=kNodeIdentifier){
+    return DB_FAILED;
+  }
+  else{
+    auto primary_iter_ast = iter_ast->child_;
+    while(primary_iter_ast!=nullptr){
+      primaryList.push_back(primary_iter_ast->val_);
+      primary_iter_ast = primary_iter_ast->next_;
+    }
+  }
+  
+  int index_l = 0;
+  auto ast_l = ast_2;
+  while (ast_l->type_!=kNodeColumnList){
+    string constraint = string(ast_l->val_);
+    bool nullable = !(constraint == "not null" || constraint == "NOT NULL");
+    bool isunique = (constraint == "unique" || constraint == "UNIQUE");
+    
+
+    auto ast_child_l = ast_l->child_;
+    string name_l = string(ast_child_l->val_);
+
+    ast_child_l = ast_child_l->next_;
+    string column_type = string(ast_child_l->val_);
+    Column* column_l;
+    if (column_type == "int"){
+      column_l = new Column(name_l,kTypeInt,index_l++,nullable,isunique);
+    }
+    else if (column_type == "float"){
+      column_l = new Column(name_l,kTypeFloat,index_l++,nullable,isunique);
+    }
+    else if(column_type == "char"){
+      ast_child_l = ast_child_l->next_;
+      int length = stoi(string(ast_child_l->val_));
+      column_l = new Column(name_l,kTypeChar,length,index_l++,nullable,isunique);
+    }
+    ColumnList.push_back(column_l);
+  }
+
+  Schema* schema_l = new Schema(ColumnList);
+  auto catalogManager = context->GetCatalog();
+  auto Txn = context->GetTransaction();
+
+  TableInfo* tableinfo_l;
+  auto result = catalogManager->CreateTable(tableName,schema_l,Txn,tableinfo_l);
+
+  if (!uniqueList.empty()){
+    for (int i=0;i<uniqueList.size();i++){
+      string indexID = uniqueList[i];
+      string indexName = "index_" + indexID + "_on_" + tableName;
+      vector<string> uniqueIndex;
+      uniqueIndex.push_back(indexID);
+      IndexInfo* indexInfo_l;
+      catalogManager->CreateIndex(tableName,indexName,uniqueIndex,Txn,indexInfo_l,"btree");
+    }
+  }
+
+  if (!primaryList.empty()){
+    string indexName = "index_";
+    for (auto &it : primaryList){
+      indexName += it;
+    }
+    indexName += "_on_" + tableName;
+    IndexInfo* indexInfo_l;
+    catalogManager->CreateIndex(tableName,indexName,primaryList,Txn,indexInfo_l,"btree");
+  }
+  return result;
 }
 
 /**
@@ -354,7 +457,26 @@ dberr_t ExecuteEngine::ExecuteDropTable(pSyntaxNode ast, ExecuteContext *context
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteDropTable" << std::endl;
 #endif
- return DB_FAILED;
+  if (current_db_.empty()){
+    return DB_FAILED;
+  }
+  else{
+    auto ast_child = ast->child_;
+    if (ast_child==nullptr){
+      return DB_FAILED;
+    }
+    string table_name = string(ast_child->val_);
+
+    auto CatalogManager = context->GetCatalog();
+    auto Txn = context->GetTransaction();
+
+    vector<IndexInfo*> indexes;
+    CatalogManager->GetTableIndexes(table_name,indexes);
+    for (auto &it:indexes){
+      CatalogManager->DropIndex(table_name,it->GetIndexName());
+    }
+    return CatalogManager->DropTable(table_name);
+  }
 }
 
 /**
@@ -364,7 +486,54 @@ dberr_t ExecuteEngine::ExecuteShowIndexes(pSyntaxNode ast, ExecuteContext *conte
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteShowIndexes" << std::endl;
 #endif
-  return DB_FAILED;
+  if (current_db_.empty()){
+    return DB_FAILED;
+  }
+  auto CatalogManager = context->GetCatalog();
+  vector<TableInfo*> TableInfo_l;
+  vector<IndexInfo*> IndexInfo_l;
+  CatalogManager->GetTables(TableInfo_l);
+  uint32_t i=0;
+  vector<uint32_t> TableRecorder;
+  for (auto &a:TableInfo_l){
+    if (i){
+      TableRecorder.push_back(i);
+    }
+    CatalogManager->GetTableIndexes(a->GetTableName(),IndexInfo_l);
+    i = IndexInfo_l.size();
+  }
+
+  stringstream ss;
+  ResultWriter writer(ss);
+  vector<int> width;
+  width.push_back(5);
+
+  for (auto &x:IndexInfo_l){
+    width[0] = max(width[0],(int)(x->GetIndexName().length()));
+  }
+
+  writer.Divider(width);
+  writer.BeginRow();
+  writer.WriteHeaderCell("Index", width[0]);
+  writer.EndRow();
+  writer.Divider(width);
+  
+  int j=0;
+  for (int i=0;i<IndexInfo_l.size();i++){
+    if (j<TableRecorder.size() && i==TableRecorder[j]){
+      writer.BeginRow();
+      writer.EndRow();
+      j++;
+    }
+    writer.BeginRow();
+    writer.WriteCell(IndexInfo_l[i]->GetIndexName(), width[0]);
+    writer.EndRow();
+  }
+
+  writer.Divider(width);
+  cout << writer.stream_.rdbuf();
+
+  return DB_SUCCESS;
 }
 
 /**
@@ -374,8 +543,56 @@ dberr_t ExecuteEngine::ExecuteCreateIndex(pSyntaxNode ast, ExecuteContext *conte
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteCreateIndex" << std::endl;
 #endif
-  return DB_FAILED;
+  if (current_db_.empty()){
+    return DB_FAILED;
+  }
+  auto ast_index = ast->child_;
+  if (ast_index==nullptr||ast_index->type_!=kNodeIdentifier){
+    return DB_FAILED;
+  }
+  string IndexName = string(ast_index->val_);
+
+  auto ast_table = ast_index->next_;
+  if (ast_table==nullptr||ast_table->type_!=kNodeIdentifier){
+    return DB_FAILED;
+  }
+  string TableName = string(ast_table->val_);
+  
+  auto ast_keyLists = ast_table->next_;
+  if (ast_keyLists==nullptr||ast_keyLists->type_!=kNodeColumnList){
+    return DB_FAILED;
+  }
+  auto ast_keyNode = ast_keyLists->child_;
+  if (ast_keyNode==nullptr||ast_keyNode->type_!=kNodeIdentifier){
+    return DB_FAILED;
+  }
+
+  vector<string> IndexLists;
+  while(ast_keyNode!=nullptr){
+    IndexLists.push_back(string(ast_keyNode->val_));
+    ast_keyNode = ast_keyNode->next_;
+  }
+  auto CatalogManager = context->GetCatalog();
+  auto Txn = context->GetTransaction();
+  IndexInfo* IndexInfo_l;
+  auto result = CatalogManager->CreateIndex(TableName,IndexName,IndexLists,Txn,IndexInfo_l,"btree");
+  return result;
 }
+
+/*
+  if (!primaryList.empty()){
+    string indexName = "index_";
+    for (auto &it : primaryList){
+      indexName += it;
+    }
+    indexName += "_on_" + tableName;
+    IndexInfo* indexInfo_l;
+    catalogManager->CreateIndex(tableName,indexName,primaryList,Txn,indexInfo_l,"btree");
+  }
+  return result;
+*/
+
+
 
 /**
  * TODO: Student Implement
@@ -384,7 +601,24 @@ dberr_t ExecuteEngine::ExecuteDropIndex(pSyntaxNode ast, ExecuteContext *context
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteDropIndex" << std::endl;
 #endif
-  return DB_FAILED;
+  if (current_db_.empty()){
+    return DB_FAILED;
+  }
+  auto ast_child = ast->child_;
+  if (ast_child==nullptr||ast_child->type_!=kNodeIdentifier){
+    return DB_FAILED;
+  }
+  string IndexName = string(ast_child->val_);
+
+  auto CatalogManager = context->GetCatalog();
+  vector<TableInfo*> TableInfoList;
+  CatalogManager->GetTables(TableInfoList);
+  dberr_t res = DB_FAILED;
+  for (auto &x:TableInfoList){
+    bool flag = CatalogManager->DropIndex(x->GetTableName(),IndexName);
+    if (flag)res = DB_SUCCESS;
+  }
+  return res;
 }
 
 dberr_t ExecuteEngine::ExecuteTrxBegin(pSyntaxNode ast, ExecuteContext *context) {
@@ -412,11 +646,56 @@ dberr_t ExecuteEngine::ExecuteTrxRollback(pSyntaxNode ast, ExecuteContext *conte
  * TODO: Student Implement
  */
 dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context) {
-#ifdef ENABLE_EXECUTE_DEBUG
-  LOG(INFO) << "ExecuteExecfile" << std::endl;
-#endif
-  return DB_FAILED;
+  // 必须先选中数据库
+  if (current_db_.empty()) {
+    cout << "No database selected" << endl;
+    return DB_FAILED;
+  }
+  // 从 AST 获取文件名
+  if (ast->child_ == nullptr || ast->child_->type_ != kNodeString) {
+    cout << "Invalid EXECFILE syntax" << endl;
+    return DB_FAILED;
+  }
+  string filename = ast->child_->val_;
+  // 构造脚本文件的完整路径：./databases/<db>/<filename>
+  string fullpath = string("./databases/") + current_db_ + "/" + filename;
+  ifstream file(fullpath);
+  if (!file.is_open()) {
+    cout << "Failed to open file: " << fullpath << endl;
+    return DB_FAILED;
+  }
+  string line;
+  while (getline(file, line)) {
+    // 跳过空行或纯注释
+    if (line.empty()) continue;
+    // 初始化解析器状态
+    MinisqlParserInit();
+    // 将这一行传给解析器
+    yy_scan_string(line.c_str());
+    yyparse();
+    // 解析错误
+    if (MinisqlParserGetError()) {
+      cout << MinisqlParserGetErrorMessage() << endl;
+      MinisqlParserFinish();
+      return DB_FAILED;
+    }
+    // 获取 AST 并判断是否是 QUIT
+    pSyntaxNode root = MinisqlGetParserRootNode();
+    if (root->type_ == kNodeQuit) {
+      MinisqlParserFinish();
+      return DB_QUIT;
+    }
+    // 执行语句
+    dberr_t rc = Execute(root);
+    ExecuteInformation(rc);
+    MinisqlParserFinish();
+    if (rc == DB_QUIT) {
+      return DB_QUIT;
+    }
+  }
+  return DB_SUCCESS;
 }
+
 
 /**
  * TODO: Student Implement
@@ -425,5 +704,6 @@ dberr_t ExecuteEngine::ExecuteQuit(pSyntaxNode ast, ExecuteContext *context) {
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteQuit" << std::endl;
 #endif
- return DB_FAILED;
+  current_db_ = "";
+  return DB_SUCCESS;
 }
