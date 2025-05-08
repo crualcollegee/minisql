@@ -157,3 +157,68 @@
       
   #image("images/10.png")
 ]))
+
+= 第三章 #h(1em) 模块5
+#h(2em)本模块分为两个部分，planner和executor；planner负责将用户输入的sql语句转化成规范化的，类封装的ast树；而executor则是根据ast树执行相应的操作。这个模块运用到了大量的```c catalog.cpp ``` 函数，以及```c syntax_tree.h 和 derr.h```内容，所以我花费了一定时间去了解了外部的一些定义。
+
+#h(2em)实际要完成的工作就是```c execute_engine.cpp```的部分内容，其开头的executor调用和```c select()```方法实现已经完成了,我们实际上只需要完成部分executor的实现即可。
+
+#h(2em)对于```c CreateTable```方法，其具体的实现其实不难，但要理解它ast树的逻辑有点困难；为此，我运行了bin目录下的main，在同目录下观察syntax.txt画出了以下逻辑图
+
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/11.png")
+]))
+
+#h(2em)根据逻辑图，我能较为轻松的完成这个函数的设计，但要注意以下逻辑：1.当```c primary key ```只有一个元素的时候，那么这个元素一定是```c unique key ``` 2. ```c primary key 和 unique key```都要调用```c CreateIndex()```函数来形成```c b+```树索引.
+
+#h(2em)剩余几个函数都较为简单，```c ExecuteDropTable()```方法用到了```c catalog.cpp```中```c GetTableIndexes() DropIndex() DropTable()```多个函数，需要花费一定时间理解
+
+\
+
+*2.正确性测试*
+
+#h(2em)```c executorTest```并不能测试到我要实现的代码，即对表的一些无关乎数据的操作；如果要测试这部分，需要我运行/bin目录下的main进行手动命令行交互：
+
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/12.png")
+]))
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/13.png")
+]))
+
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/14.png")
+]))
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/15.png")
+]))
+\
+\
+\
+#h(2em)当然，```c executorTest```可以验证其他一些模块例如```c catalog.cpp```不会出错：
+\
+\
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/16.png")
+]))
+\
+*3.git推送记录*
+\
+\
+#figure(
+    grid(columns: 35em, inset: 0.1em,fill: luma(230),align(right)[
+      
+  #image("images/17.png")
+]))
