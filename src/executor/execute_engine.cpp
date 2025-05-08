@@ -393,15 +393,22 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   }
   
   int index_l = 0;
-  auto ast_l = ast_2;
+  auto ast_l = ast_2->child_;
   while (ast_l->type_!=kNodeColumnList){
-    string constraint = string(ast_l->val_);
-    bool nullable = !(constraint == "not null" || constraint == "NOT NULL");
-    bool isunique = (constraint == "unique" || constraint == "UNIQUE");
+    bool nullable = true;
+    bool isunique = false;
+    if (ast_l->val_!=nullptr){
+      string constraint = string(ast_l->val_);
+      nullable = !(constraint == "not null" || constraint == "NOT NULL");
+      isunique = (constraint == "unique" || constraint == "UNIQUE");
+    }
     
 
     auto ast_child_l = ast_l->child_;
     string name_l = string(ast_child_l->val_);
+    if (isunique){
+      uniqueList.push_back(name_l);
+    }
 
     ast_child_l = ast_child_l->next_;
     string column_type = string(ast_child_l->val_);
@@ -413,11 +420,21 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
       column_l = new Column(name_l,kTypeFloat,index_l++,nullable,isunique);
     }
     else if(column_type == "char"){
-      ast_child_l = ast_child_l->next_;
+      ast_child_l = ast_child_l->child_;
       int length = stoi(string(ast_child_l->val_));
       column_l = new Column(name_l,kTypeChar,length,index_l++,nullable,isunique);
     }
     ColumnList.push_back(column_l);
+
+    ast_l = ast_l->next_;
+  }
+
+  if (primaryList.size()==1){
+    string SinglePrimaryKey = primaryList[0];
+    auto it = find(uniqueList.begin(),uniqueList.end(),SinglePrimaryKey);
+    if (it!=uniqueList.end()){
+      uniqueList.push_back(SinglePrimaryKey);
+    }
   }
 
   Schema* schema_l = new Schema(ColumnList);
