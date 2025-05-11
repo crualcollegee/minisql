@@ -150,10 +150,12 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
   char* new_page = reinterpret_cast<char*>(src);
   int index = GetSize();
   for (int i=0;i<size;i++){
-    PairCopy(PairPtrAt(index),src,1);
-    new_page += sizeof(pair_size);
+    PairCopy(PairPtrAt(index),new_page,1);
+    new_page += pair_size;
     SetSize(GetSize()+1);
-    index ++;  
+    reinterpret_cast<BPlusTreePage*>(buffer_pool_manager->FetchPage(ValueAt(index))->GetData())->SetParentPageId(GetPageId());
+    buffer_pool_manager->UnpinPage(ValueAt(index),true);
+    index ++;
   }
 }
 //void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPoolManager *buffer_pool_manager) {
