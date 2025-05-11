@@ -248,7 +248,12 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
     index_meta->SerializeTo(meta_page->GetData());
     //更新index_info
     index_info->Init(index_meta, table_info, buffer_pool_manager_);
-
+    Row key;
+    for (auto it = table_info->GetTableHeap()->Begin(nullptr); it != table_info->GetTableHeap()->End(); it++) {
+      auto row = *it;
+      row.GetKeyFromRow(table_info->GetSchema(), index_info->GetIndexKeySchema(), key);
+      index_info->GetIndex()->InsertEntry(key, row.GetRowId(), txn);
+    }
     //init index
     index_names_[table_name][index_name] = index_id;
     indexes_[index_id] = index_info;

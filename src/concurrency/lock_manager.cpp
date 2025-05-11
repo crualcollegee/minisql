@@ -147,12 +147,40 @@ bool LockManager::Unlock(Txn *txn, const RowId &rid) {
 /**
  * TODO: Student Implement
  */
-void LockManager::LockPrepare(Txn *txn, const RowId &rid) {}
+void LockManager::LockPrepare(Txn *txn, const RowId &rid) {
+    // 获取锁请求队列
+    auto &lock_req_queue = lock_table_[rid];
+
+    // 检查事务的状态是否允许获取锁
+    if (txn->GetState() != TxnState::kGrowing) {
+        txn->SetState(TxnState::kAborted);
+        throw TxnAbortException(txn->GetTxnId(), AbortReason::kLockOnShrinking);
+    }
+
+    // 检查事务的隔离级别是否允许获取锁
+    if (txn->GetIsolationLevel() == IsolationLevel::kReadUncommitted) {
+        txn->SetState(TxnState::kAborted);
+        throw TxnAbortException(txn->GetTxnId(), AbortReason::kLockSharedOnReadUncommitted);
+    }
+}
 
 /**
  * TODO: Student Implement
  */
 void LockManager::CheckAbort(Txn *txn, LockManager::LockRequestQueue &req_queue) {
+    // 遍历锁请求队列中的所有请求
+    for (const auto &lock_request : req_queue.req_list_) {
+        // 如果当前事务的状态已经是 Aborted，则直接返回
+        if (txn->GetState() == TxnState::kAborted) {
+            return;
+        }
+
+        // 检查是否存在冲突的锁请求
+        if (lock_request.txn_id_ != txn->GetTxnId() && lock_request.granted_ == LockMode::kExclusive) {
+            txn->SetState(TxnState::kAborted);
+            throw TxnAbortException(txn->GetTxnId(), AbortReason::kDeadlock);
+        }
+    }
 }
 
 /**
