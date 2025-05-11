@@ -147,15 +147,13 @@ void LeafPage::MoveHalfTo(LeafPage *recipient) {
  * Copy starting from items, and copy {size} number of elements into me.
  */
 void LeafPage::CopyNFrom(void *src, int size) {
-  char* generic_src = reinterpret_cast<char*>(src);
+  src = reinterpret_cast<char*> (src);
+  int index = GetSize();
   for (int i=0;i<size;i++){
-    GenericKey* new_key = new GenericKey;
-    memcpy(new_key, generic_src, GetKeySize());
-    generic_src += GetKeySize();
-    RowId* new_row = new RowId;
-    memcpy(new_row, generic_src, sizeof(RowId));
-    generic_src += sizeof(RowId);
-    CopyLastFrom(new_key,*new_row);
+    PairCopy(PairPtrAt(index), src, 1);
+    src += pair_size;
+    SetSize(GetSize()+1);
+    index ++;
   }
 }
 

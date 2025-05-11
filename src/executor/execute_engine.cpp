@@ -663,46 +663,36 @@ dberr_t ExecuteEngine::ExecuteTrxRollback(pSyntaxNode ast, ExecuteContext *conte
  * TODO: Student Implement
  */
 dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context) {
-  // 必须先选中数据库
   if (current_db_.empty()) {
     cout << "No database selected" << endl;
     return DB_FAILED;
   }
-  // 从 AST 获取文件名
   if (ast->child_ == nullptr || ast->child_->type_ != kNodeString) {
     cout << "Invalid EXECFILE syntax" << endl;
     return DB_FAILED;
   }
   string filename = ast->child_->val_;
-  // 构造脚本文件的完整路径：./databases/<db>/<filename>
-  string fullpath = string("./databases/") + current_db_ + "/" + filename;
-  ifstream file(fullpath);
+  ifstream file(filename);
   if (!file.is_open()) {
-    cout << "Failed to open file: " << fullpath << endl;
+    cout << "Failed to open file: " << filename << endl;
     return DB_FAILED;
   }
   string line;
   while (getline(file, line)) {
-    // 跳过空行或纯注释
     if (line.empty()) continue;
-    // 初始化解析器状态
     MinisqlParserInit();
-    // 将这一行传给解析器
     yy_scan_string(line.c_str());
     yyparse();
-    // 解析错误
     if (MinisqlParserGetError()) {
       cout << MinisqlParserGetErrorMessage() << endl;
       MinisqlParserFinish();
       return DB_FAILED;
     }
-    // 获取 AST 并判断是否是 QUIT
     pSyntaxNode root = MinisqlGetParserRootNode();
     if (root->type_ == kNodeQuit) {
       MinisqlParserFinish();
       return DB_QUIT;
     }
-    // 执行语句
     dberr_t rc = Execute(root);
     ExecuteInformation(rc);
     MinisqlParserFinish();

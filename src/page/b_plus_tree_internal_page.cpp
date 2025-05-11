@@ -148,14 +148,12 @@ void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer
 // 移动size个到当前internalpage的最后，注意调用函数
 void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool_manager) {
   char* new_page = reinterpret_cast<char*>(src);
+  int index = GetSize();
   for (int i=0;i<size;i++){
-    GenericKey* new_key = new GenericKey;
-    memcpy(new_key, new_page, GetKeySize());
-    new_page += GetKeySize();
-    page_id_t* new_value = new page_id_t;
-    memcpy(new_value, new_page, sizeof(page_id_t));
-    new_page += sizeof(page_id_t);
-    CopyLastFrom(new_key, *new_value, buffer_pool_manager);
+    PairCopy(PairPtrAt(index),src,1);
+    new_page += sizeof(pair_size);
+    SetSize(GetSize()+1);
+    index ++;  
   }
 }
 //void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPoolManager *buffer_pool_manager) {
@@ -171,12 +169,8 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
 void InternalPage::Remove(int index) {
   int size_t = GetSize();
   for (int i=index ;i<size_t-1 ; i++){
-    GenericKey * new_key = new GenericKey;
-    page_id_t new_value;
-    new_key = KeyAt(i+1);
-    new_value = ValueAt(i+1);
-    SetKeyAt(i, new_key);
-    SetValueAt(i, new_value);
+    SetKeyAt(i, KeyAt(i+1));
+    SetValueAt(i, ValueAt(i+1));
   }
   SetSize(size_t-1);
 }
