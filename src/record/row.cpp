@@ -8,9 +8,9 @@ uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
 
   // 写入字段数量
   uint32_t field_count = fields_.size();
-  memcpy(buf + offset, &field_count, sizeof(field_count));
+  memcpy(buf + offset, &field_count, sizeof(RowId));
 
-  offset += sizeof(field_count);
+  offset += sizeof(RowId);
   // 写入空值位图
   uint32_t null_bitmap_size = (field_count + 7) / 8; // 每8个字段占1字节
   std::vector<uint8_t> null_bitmap(null_bitmap_size, 0);
@@ -38,26 +38,21 @@ uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
   uint32_t offset = 0;
 
   // 读取字段数量
-  uint32_t field_count = 0;
-  memcpy(&field_count, buf + offset, sizeof(field_count));
-  offset += sizeof(field_count);
+  RowId field_count = rid_;
+  memcpy(&field_count, buf + offset, sizeof(RowId));
+  offset += sizeof(RowId);
   // 读取空值位图
-  uint32_t null_bitmap_size = (field_count + 7) / 8;
+  uint32_t null_bitmap_size = (schema->GetColumnCount() + 7) / 8;
   std::vector<uint8_t> null_bitmap(null_bitmap_size, 0);
   memcpy(null_bitmap.data(), buf + offset, null_bitmap_size);
   offset += null_bitmap_size;
   // 读取每个字段的数据
-  fields_.resize(field_count, nullptr);
-  for (uint32_t i = 0; i < field_count; i++) {
-    if (null_bitmap[i / 8] & (1 << (i % 8))) {
-      // 如果字段是空值
-      fields_[i] = new Field(schema->GetColumn(i)->GetType());
-    } else {
-      // 如果字段有值
-      fields_[i] = new Field(schema->GetColumn(i)->GetType());
-      int tmp = Field::DeserializeFrom(buf + offset, schema->GetColumn(i)->GetType(), &fields_[i], 0);
-      offset += tmp;
-    }
+
+  for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
+      TypeId type = schema->GetColumn(i)->GetType();
+      Field *field;
+      offset += field->DeserializeFrom(buf + offset, type, &field, null_bitmap[i / 8] & (1 << (i % 8)));
+      fields_.push_back(field);
   }
   return offset;
 }
@@ -69,7 +64,7 @@ uint32_t Row::GetSerializedSize(Schema *schema) const {
   uint32_t size = 0;
 
   // 字段数量大小
-  size += sizeof(uint32_t);
+  size += sizeof(RowId);
 
   // 空值位图大小
   uint32_t field_count = fields_.size();
