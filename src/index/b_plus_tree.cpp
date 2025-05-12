@@ -520,24 +520,24 @@ bool BPlusTree::AdjustRoot(BPlusTreePage *old_root_node) {
       buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID,true);
       return true;
     }
-    else if (!old_root_node->IsLeafPage()&&old_root_node->GetSize()==1){
-      auto root_internal_page = reinterpret_cast<BPlusTreeInternalPage*>(old_root_node);
-      page_id_t child_page_id = root_internal_page->ValueAt(0);
-      root_page_id_ = child_page_id;
+  }
+  else if (!old_root_node->IsLeafPage()&&old_root_node->GetSize()==1){
+    auto root_internal_page = reinterpret_cast<BPlusTreeInternalPage*>(old_root_node);
+    page_id_t child_page_id = root_internal_page->ValueAt(0);
+    root_page_id_ = child_page_id;
 
-      auto child_page_l =reinterpret_cast<BPlusTreePage*>(buffer_pool_manager_->FetchPage(child_page_id)->GetData());
-      child_page_l ->SetParentPageId(INVALID_PAGE_ID);
-      buffer_pool_manager_->UnpinPage(child_page_id,true);
+    auto child_page_l =reinterpret_cast<BPlusTreePage*>(buffer_pool_manager_->FetchPage(child_page_id)->GetData());
+    child_page_l ->SetParentPageId(INVALID_PAGE_ID);
+    buffer_pool_manager_->UnpinPage(child_page_id,true);
 
-      UpdateRootPageId(0);
-      buffer_pool_manager_->UnpinPage(old_root_node->GetPageId(),false);
-      buffer_pool_manager_->DeletePage(old_root_node->GetPageId());
+    UpdateRootPageId(0);
+    buffer_pool_manager_->UnpinPage(old_root_node->GetPageId(),false);
+    buffer_pool_manager_->DeletePage(old_root_node->GetPageId());
 
-      return true;
-    }
-    else{
-      return false;
-    }
+    return true;
+  }
+  else{
+    return false;
   }
 }
 
